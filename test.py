@@ -1,49 +1,43 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from __future__ import absolute_import
+import os
+import logging.handlers
+from py_video_mapping import PyVideoMapping
 import cv2
-import numpy as np
 
-"""
-# now that we have the dimensions of the new image, construct
-# the set of destination points to obtain a "birds eye view",
-# (i.e. top-down view) of the image, again specifying points
-# in the top-left, top-right, bottom-right, and bottom-left
-# order
+PYTHON_LOGGER = logging.getLogger(__name__)
+if not os.path.exists("log"):
+    os.mkdir("log")
+HDLR = logging.handlers.TimedRotatingFileHandler("log/test.log",
+                                                 when="midnight", backupCount=60)
+STREAM_HDLR = logging.StreamHandler()
+FORMATTER = logging.Formatter("%(asctime)s %(filename)s [%(levelname)s] %(message)s")
+HDLR.setFormatter(FORMATTER)
+STREAM_HDLR.setFormatter(FORMATTER)
+PYTHON_LOGGER.addHandler(HDLR)
+PYTHON_LOGGER.addHandler(STREAM_HDLR)
+PYTHON_LOGGER.setLevel(logging.DEBUG)
 
-# compute the perspective transform matrix and then apply it
+# Absolute path to the folder location of this python file
+FOLDER_ABSOLUTE_PATH = os.path.normpath(os.path.dirname(os.path.abspath(__file__)))
 
-"""
+py_video_mapping = PyVideoMapping(PyVideoMapping.get_all_screens()[0])
+square = cv2.imread("square.png")
+
+w, h, _ = square.shape
+
+wall_paper = py_video_mapping.creat_blank_image()
+top_left = [(w // 2) - 10, 0]
+top_right = [(w // 2) + 10, 0]
+bottom_right = [w, h]
+bottom_left = [w, 0]
+
+wrap = py_video_mapping.transform_image(square, top_left, top_right, bottom_right, bottom_left, w, h)
+
+frame = py_video_mapping.add_sub_image(wall_paper, wrap, 100, 100)
+
+py_video_mapping.show_to_projector(frame)
 
 
-def show_full_frame(frame):
-    """
-    Given a frame, display the image in full screen
-    :param frame: image to display full screen
-    """
-    cv2.namedWindow('Full Screen', cv2.WND_PROP_FULLSCREEN)
-    cv2.setWindowProperty('Full Screen', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    cv2.imshow('Full Screen', frame)
-
-
-img = cv2.imread("square.png")
-
-h, w, _ = img.shape
-
-print(w, " ", h)
-
-# Y, x
-dst = np.array([
-    [0, 0],  # Top left
-    [10, 0],  # Top right
-    [40, 15],  # Bottom right
-    [10, 20]], dtype="float32")  # Bottom left
-
-rect = np.array([
-    [0, 0],
-    [w - 1, 0],
-    [w - 1, h - 1],
-    [0, h - 1]], dtype="float32")
-
-M = cv2.getPerspectiveTransform(rect, dst)
-warped = cv2.warpPerspective(img, M, (w, h))
-
-show_full_frame(img)
-cv2.waitKey(0)
