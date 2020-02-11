@@ -97,6 +97,10 @@ class PyVideoMapping:
         warped = cv2.warpPerspective(frame, M, (output_width, output_height))
         return warped
 
+    def change_ui_screen(self, ui_screen : Monitor):
+        self.ui_screen = ui_screen
+        self.screen_relation = ScreenRelation(self.ui_screen, self.scree)
+
     def creat_blank_image(self):
         return np.zeros((self.screen.height, self.screen.width, 3), np.uint8)
 
