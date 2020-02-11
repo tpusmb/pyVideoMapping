@@ -11,6 +11,8 @@ import imutils
 import numpy as np
 import screeninfo
 from screeninfo import Monitor
+from .screen_relation import ScreenRelation
+
 
 PYTHON_LOGGER = logging.getLogger(__name__)
 if not os.path.exists("log"):
