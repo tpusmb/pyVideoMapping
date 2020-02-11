@@ -5,14 +5,17 @@ from __future__ import absolute_import
 
 import logging.handlers
 import os
+from threading import Thread
 
+from scipy.spatial import distance as dist
 import cv2
 import imutils
 import numpy as np
 import screeninfo
 from screeninfo import Monitor
-from .screen_relation import ScreenRelation
+import time
 
+from .screen_relation import ScreenRelation
 
 PYTHON_LOGGER = logging.getLogger(__name__)
 if not os.path.exists("log"):
@@ -33,6 +36,34 @@ FOLDER_ABSOLUTE_PATH = os.path.normpath(os.path.dirname(os.path.abspath(__file__
 TEST_IMAGE = os.path.join(FOLDER_ABSOLUTE_PATH, "test_image.jpg")
 
 
+class ImgShow(Thread):
+    def __init__(self, mutex, screen):
+        ''' Constructor. '''
+        Thread.__init__(self)
+        self.mutex = mutex
+        self.screen = screen
+        self.current_image = None
+        self.window_name = 'projector'
+        self.end = False
+
+    def run(self):
+
+        cv2.namedWindow(self.window_name, cv2.WND_PROP_FULLSCREEN)
+        cv2.moveWindow(self.window_name, self.screen.x - 1, self.screen.y - 1)
+        cv2.setWindowProperty(self.window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        while not self.end:
+            if self.current_image is not None:
+                cv2.imshow(self.window_name, self.current_image)
+                cv2.waitKey(1)
+            time.sleep(0.1)
+
+    def show_image(self, img):
+        self.current_image = img.copy()
+
+    def stop(self):
+        self.end = True
+
+
 class PyVideoMapping:
     def __init__(self, screen, ui_screen: Monitor = None):
         self.screen = screen
@@ -40,9 +71,10 @@ class PyVideoMapping:
         self.screen_relation = None
         self.wall_paper = self.creat_blank_image()
         self.test_image = cv2.imread(TEST_IMAGE)
-
+        self.img_show = ImgShow(None, self.screen)
         if self.ui_screen is not None:
-            self.screen_relation = ScreenRelation(ui_screen, self.scree)
+            self.screen_relation = ScreenRelation(ui_screen, self.screen)
+        self.img_show.start()
 
     @staticmethod
     def get_image_size(frame):
@@ -93,28 +125,24 @@ class PyVideoMapping:
             bottom_right,
             bottom_left
         ], dtype="float32")
-        M = cv2.getPerspectiveTransform(rect, dst)
-        warped = cv2.warpPerspective(frame, M, (output_width, output_height))
-        return warped
 
-    def change_ui_screen(self, ui_screen : Monitor):
+        h = cv2.getPerspectiveTransform(rect, dst)
+        warped = cv2.warpPerspective(frame, h, (output_width, output_height))
+        min_x = min(top_left[0], bottom_left[0])
+        max_x = max(top_right[0], bottom_right[0])
+        min_y = min(top_left[1], top_right[1])
+        max_y = max(bottom_left[1], bottom_right[1])
+        return warped[min_y:max_y, min_x:max_x]
+
+    def change_ui_screen(self, ui_screen: Monitor):
         self.ui_screen = ui_screen
-        self.screen_relation = ScreenRelation(self.ui_screen, self.scree)
+        self.screen_relation = ScreenRelation(self.ui_screen, self.screen)
 
     def creat_blank_image(self):
         return np.zeros((self.screen.height, self.screen.width, 3), np.uint8)
 
     def show_to_projector(self, frame, blocking=True):
-        window_name = 'projector'
-        cv2.namedWindow(window_name, cv2.WND_PROP_FULLSCREEN)
-        cv2.moveWindow(window_name, self.screen.x - 1, self.screen.y - 1)
-        cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        cv2.imshow(window_name, frame)
-        if blocking:
-            cv2.waitKey()
-            cv2.destroyAllWindows()
-        else:
-            cv2.waitKey(1)
+        self.img_show.show_image(frame)
 
     def mapping_calibration(self, ui_images):
         """
@@ -122,11 +150,11 @@ class PyVideoMapping:
         :param ui_images: (list) All test image to display into the projector
                                     Image 1
             [ [ui_top_left, ui_top_right, ui_bottom_right, ui_bottom_left], ... ]
+            ui_top_left = x, y
         :return:
         """
         if self.screen_relation is None:
             raise ValueError("Need to provide ui screen in the constructor")
-        h, w = self.get_image_size(self.test_image)
         output_frame = self.wall_paper.copy()
         # Get all image tuple (tuple) x, y
         for ui_top_left, ui_top_right, ui_bottom_right, ui_bottom_left in ui_images:
@@ -134,15 +162,12 @@ class PyVideoMapping:
             projector_top_right = self.screen_relation.to_projector_screen(*ui_top_right)
             projector_bottom_right = self.screen_relation.to_projector_screen(*ui_bottom_right)
             projector_bottom_left = self.screen_relation.to_projector_screen(*ui_bottom_left)
-
-            new_width = max(abs(projector_top_left[0] - projector_top_right[0]),
-                            abs(projector_bottom_left[0] - projector_bottom_right[0]))
-            new_height = max(abs(projector_top_left[1] - projector_bottom_left[1]),
-                             abs(projector_top_right[1] - projector_bottom_right[1]))
-            wrap = self.transform_image(self.test_image, projector_bottom_left, projector_bottom_right,
+            wrap = self.transform_image(self.test_image, projector_top_left, projector_top_right,
                                         projector_bottom_right, projector_bottom_left,
-                                        new_width, new_height)
+                                        self.screen.width, self.screen.height)
 
             output_frame = self.add_sub_image(output_frame, wrap, *projector_top_left)
-
         self.show_to_projector(output_frame, blocking=False)
+
+    def stop(self):
+        self.img_show.stop()

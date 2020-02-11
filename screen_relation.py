@@ -60,4 +60,4 @@ class ScreenRelation:
         """
         new_x = self.to_projector_screen_x(ui_screen_x)
         new_y = self.to_projector_screen_y(ui_screen_y)
-        return new_y, new_x
+        return new_x, new_y
