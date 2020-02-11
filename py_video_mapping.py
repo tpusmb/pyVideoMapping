@@ -10,7 +10,6 @@ import cv2
 import imutils
 import numpy as np
 import screeninfo
-from imutils.perspective import four_point_transform
 
 PYTHON_LOGGER = logging.getLogger(__name__)
 if not os.path.exists("log"):
@@ -32,6 +31,15 @@ FOLDER_ABSOLUTE_PATH = os.path.normpath(os.path.dirname(os.path.abspath(__file__
 class PyVideoMapping:
     def __init__(self, screen):
         self.screen = screen
+
+    @staticmethod
+    def get_image_size(frame):
+        """
+
+        :param frame:
+        :return: (tuple) height, width
+        """
+        return frame.shape
 
     @staticmethod
     def get_all_screens():
